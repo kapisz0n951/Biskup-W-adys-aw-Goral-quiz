@@ -1,0 +1,5 @@
+{
+  "name": "Quiz Kodowy - Biskup Władysław Goral",
+  "description": "A quiz application where users enter codes to unlock questions about Bishop Władysław Goral. Features a 5-second penalty for incorrect answers.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: presence
+    // Document ID: {userId}
+    // Fields:
+    //   - nickname: string (required, 1-20 chars)
+    //   - coins: number (required, >= 0)
+    //   - answeredCount: number (required, 0-10)
+    //   - lastActive: timestamp (required)
+    //   - isFinished: bool (optional)
+    //   - finishTime: timestamp (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUserProgress(data) {
+      return data.keys().hasAll(['nickname', 'coins', 'answeredCount', 'lastActive']) &&
+             data.nickname is string && data.nickname.size() >= 1 && data.nickname.size() <= 20 &&
+             data.coins is number && data.coins >= 0 &&
+             data.answeredCount is number && data.answeredCount >= 0 && data.answeredCount <= 10 &&
+             data.lastActive is timestamp;
+    }
+
+    match /presence/{userId} {
+      // Anyone authenticated can read presence to see the progress bar and leaderboard
+      allow read: if isAuthenticated();
+      
+      // Users can only manage their own progress
+      allow create: if isOwner(userId) && isValidUserProgress(request.resource.data);
+      allow update: if isOwner(userId) && isValidUserProgress(request.resource.data);
+      allow delete: if isOwner(userId);
+    }
+  }
+}

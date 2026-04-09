@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "UserProgress": {
+      "title": "User Progress",
+      "description": "Real-time progress and stats for a user in the quiz.",
+      "type": "object",
+      "properties": {
+        "nickname": {
+          "type": "string",
+          "description": "User's chosen nickname"
+        },
+        "coins": {
+          "type": "number",
+          "description": "Current number of coins"
+        },
+        "answeredCount": {
+          "type": "number",
+          "description": "Number of questions answered"
+        },
+        "lastActive": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last activity timestamp"
+        },
+        "isFinished": {
+          "type": "boolean",
+          "description": "Whether the user has finished all questions"
+        },
+        "finishTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user finished the quiz"
+        }
+      },
+      "required": ["nickname", "coins", "answeredCount", "lastActive"]
+    }
+  },
+  "firestore": {
+    "/presence/{userId}": {
+      "schema": "UserProgress",
+      "description": "Collection for tracking real-time presence and progress of users."
+    }
+  }
+}

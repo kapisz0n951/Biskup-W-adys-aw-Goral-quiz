@@ -1,30 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Lock, CheckCircle2, XCircle, Timer, ArrowRight, RefreshCcw, Coins, Users, Trophy, UserCircle } from "lucide-react";
+import { Lock, CheckCircle2, XCircle, Timer, ArrowRight, RefreshCcw, Coins } from "lucide-react";
 import { QUESTIONS, Question } from "./types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { db, auth, loginAnonymously } from "./firebase";
-import { doc, setDoc, onSnapshot, collection, serverTimestamp, query, orderBy, limit, Timestamp } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-
-interface PlayerPresence {
-  id: string;
-  nickname: string;
-  coins: number;
-  answeredCount: number;
-  lastActive: Timestamp;
-  isFinished?: boolean;
-  finishTime?: Timestamp;
-}
 
 export default function App() {
-  const [nickname, setNickname] = useState("");
-  const [isJoined, setIsJoined] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  
   const [code, setCode] = useState("");
   const [activeQuestion, setActiveQuestion] = useState<Question | null>(null);
   const [penaltyTime, setPenaltyTime] = useState(0);
@@ -33,55 +16,8 @@ export default function App() {
   const [coins, setCoins] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<number[]>([]);
-  const [players, setPlayers] = useState<PlayerPresence[]>([]);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const isFinished = answeredQuestionIds.length === QUESTIONS.length;
-
-  // Auth listener
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Presence listener
-  useEffect(() => {
-    if (!user) return;
-    const q = query(collection(db, "presence"), orderBy("coins", "desc"), limit(50));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const pList: PlayerPresence[] = [];
-      snapshot.forEach((doc) => {
-        pList.push({ id: doc.id, ...doc.data() } as PlayerPresence);
-      });
-      setPlayers(pList);
-    });
-    return () => unsubscribe();
-  }, [user]);
-
-  // Update own presence
-  useEffect(() => {
-    if (!user || !isJoined) return;
-    
-    const updatePresence = async () => {
-      try {
-        await setDoc(doc(db, "presence", user.uid), {
-          nickname,
-          coins,
-          answeredCount: answeredQuestionIds.length,
-          lastActive: serverTimestamp(),
-          isFinished,
-          finishTime: isFinished ? serverTimestamp() : null
-        }, { merge: true });
-      } catch (err) {
-        console.error("Error updating presence:", err);
-      }
-    };
-
-    const timeout = setTimeout(updatePresence, 500); // Debounce
-    return () => clearTimeout(timeout);
-  }, [user, isJoined, coins, answeredQuestionIds.length, isFinished, nickname]);
 
   // Handle penalty countdown
   useEffect(() => {
@@ -92,22 +28,6 @@ export default function App() {
       return () => clearInterval(timer);
     }
   }, [penaltyTime]);
-
-  const handleJoin = async () => {
-    if (!nickname.trim()) return;
-    setAuthError(null);
-    try {
-      await loginAnonymously();
-      setIsJoined(true);
-    } catch (err: any) {
-      if (err.code === "auth/admin-restricted-operation") {
-        setAuthError("Logowanie anonimowe jest wyłączone w konsoli Firebase. Musisz je włączyć w zakładce Authentication -> Sign-in method.");
-      } else {
-        setAuthError("Wystąpił błąd podczas dołączania. Spróbuj ponownie.");
-      }
-      console.error(err);
-    }
-  };
 
   const handleUnlock = () => {
     const question = QUESTIONS.find((q) => q.code === code.trim());
@@ -157,106 +77,10 @@ export default function App() {
     setAttempts(0);
   };
 
-  const allFinished = useMemo(() => {
-    return players.length > 0 && players.every(p => p.isFinished);
-  }, [players]);
-
-  if (!isJoined) {
-    return (
-      <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-4 font-sans text-[#1A1A1A]">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md"
-        >
-          <Card className="border-none shadow-2xl bg-white rounded-[40px] overflow-hidden">
-            <CardHeader className="bg-[#1A1A1A] text-white p-10 text-center">
-              <div className="flex justify-center mb-4">
-                <div className="p-4 bg-white/10 rounded-full">
-                  <UserCircle className="w-12 h-12 text-white" />
-                </div>
-              </div>
-              <CardTitle className="text-3xl font-black tracking-tight uppercase">Witaj w Quizie!</CardTitle>
-              <CardDescription className="text-white/60 text-lg">
-                Wpisz swój nick, aby dołączyć do gry.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-10 space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-gray-400">Twój Nick</label>
-                <Input
-                  type="text"
-                  placeholder="Np. MistrzQuizu"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                  className="h-14 text-xl rounded-2xl border-gray-100 focus:ring-2 focus:ring-[#1A1A1A] transition-all px-6"
-                />
-              </div>
-              
-              {authError && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium"
-                >
-                  <div className="flex gap-2">
-                    <XCircle className="w-5 h-5 shrink-0" />
-                    <p>{authError}</p>
-                  </div>
-                  <p className="mt-2 text-xs opacity-80">
-                    Instrukcja: Wejdź do Firebase Console → Authentication → Sign-in method → Włącz "Anonymous".
-                  </p>
-                </motion.div>
-              )}
-
-              <Button
-                onClick={handleJoin}
-                disabled={!nickname.trim()}
-                className="w-full h-14 bg-[#1A1A1A] hover:bg-gray-800 text-white rounded-2xl font-bold text-lg transition-all active:scale-95"
-              >
-                ROZPOCZNIJ GRĘ
-              </Button>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-4 pt-24 font-sans text-[#1A1A1A] relative overflow-x-hidden">
-      {/* Real-time Progress Bar */}
-      <div className="fixed top-0 left-0 w-full bg-white/80 backdrop-blur-md border-b border-gray-100 z-40 p-4 overflow-x-auto">
-        <div className="max-w-7xl mx-auto flex items-center gap-6 no-scrollbar">
-          <div className="flex items-center gap-2 font-bold text-gray-400 shrink-0">
-            <Users className="w-4 h-4" />
-            <span className="text-xs uppercase tracking-widest">Gracze:</span>
-          </div>
-          <div className="flex gap-4">
-            {players.map((p) => (
-              <div key={p.id} className="flex flex-col gap-1 min-w-[120px]">
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
-                  <span className={p.id === user?.uid ? "text-blue-600" : "text-gray-600"}>
-                    {p.nickname} {p.id === user?.uid && "(Ty)"}
-                  </span>
-                  <span className="text-gray-400">{p.answeredCount}/10</span>
-                </div>
-                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(p.answeredCount / 10) * 100}%` }}
-                    className={`h-full rounded-full ${p.isFinished ? "bg-green-500" : "bg-[#1A1A1A]"}`}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
+    <div className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-4 font-sans text-[#1A1A1A] relative overflow-x-hidden">
       {/* Coins Display */}
-      <div className="fixed top-20 right-6 z-30">
+      <div className="fixed top-6 right-6 z-30">
         <motion.div 
           key={coins}
           initial={{ scale: 1.2, color: "#EAB308" }}
@@ -269,55 +93,39 @@ export default function App() {
       </div>
 
       <AnimatePresence mode="wait">
-        {allFinished ? (
+        {isFinished ? (
           <motion.div
-            key="leaderboard"
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full max-w-3xl"
+            key="finished"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-lg text-center"
           >
-            <Card className="border-none shadow-2xl bg-white rounded-[40px] overflow-hidden">
-              <CardHeader className="bg-[#1A1A1A] text-white p-12 text-center">
-                <div className="flex justify-center mb-6">
-                  <Trophy className="w-20 h-20 text-yellow-400" />
+            <Card className="border-none shadow-2xl bg-white rounded-[40px] p-12 overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-yellow-400 via-orange-500 to-yellow-400" />
+              <CardHeader className="space-y-4">
+                <div className="flex justify-center">
+                  <div className="bg-yellow-100 p-6 rounded-full">
+                    <Coins className="w-16 h-16 text-yellow-600" />
+                  </div>
                 </div>
-                <CardTitle className="text-5xl font-black tracking-tighter uppercase mb-2">TOP LISTA</CardTitle>
-                <CardDescription className="text-white/60 text-xl font-medium">
-                  Wszyscy gracze ukończyli quiz!
+                <CardTitle className="text-4xl font-black tracking-tight uppercase">Gratulacje!</CardTitle>
+                <CardDescription className="text-lg font-medium text-gray-500">
+                  Ukończyłeś wszystkie {QUESTIONS.length} pytań quizu.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-gray-50">
-                  {players.map((p, index) => (
-                    <div 
-                      key={p.id} 
-                      className={`flex items-center justify-between p-8 ${p.id === user?.uid ? "bg-blue-50/50" : ""}`}
-                    >
-                      <div className="flex items-center gap-6">
-                        <span className={`text-3xl font-black ${index < 3 ? "text-yellow-600" : "text-gray-300"}`}>
-                          #{index + 1}
-                        </span>
-                        <div>
-                          <div className="text-2xl font-bold text-gray-900">{p.nickname}</div>
-                          <div className="text-sm text-gray-400 font-medium">
-                            Ukończono: {p.finishTime?.toDate().toLocaleTimeString() || "N/A"}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 bg-gray-50 px-6 py-3 rounded-2xl">
-                        <Coins className="w-6 h-6 text-yellow-500" />
-                        <span className="text-3xl font-black">{p.coins}</span>
-                      </div>
-                    </div>
-                  ))}
+              <CardContent className="py-8">
+                <div className="text-sm uppercase tracking-[0.2em] text-gray-400 font-bold mb-2">Twój Wynik Końcowy</div>
+                <div className="text-8xl font-black text-[#1A1A1A] flex items-center justify-center gap-4">
+                  {coins}
+                  <span className="text-2xl text-gray-400">monet</span>
                 </div>
               </CardContent>
-              <CardFooter className="p-10 flex justify-center bg-gray-50">
+              <CardFooter className="flex justify-center pt-8">
                 <Button 
                   onClick={() => window.location.reload()}
-                  className="bg-[#1A1A1A] hover:bg-gray-800 text-white px-12 py-8 text-2xl rounded-3xl font-black transition-all hover:scale-105 shadow-xl"
+                  className="bg-[#1A1A1A] hover:bg-gray-800 text-white px-10 py-7 text-xl rounded-2xl font-bold transition-all hover:scale-105"
                 >
-                  ZAGRAJ PONOWNIE
+                  Zagraj Ponownie
                 </Button>
               </CardFooter>
             </Card>
@@ -339,7 +147,7 @@ export default function App() {
                   <CardTitle className="text-2xl font-bold tracking-tight">Quiz Kodowy</CardTitle>
                 </div>
                 <CardDescription className="text-white/60">
-                  Wprowadź kod, aby odblokować pytanie. ({answeredQuestionIds.length}/10)
+                  Wprowadź kod, aby odblokować pytanie. ({answeredQuestionIds.length}/{QUESTIONS.length})
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8 space-y-6">

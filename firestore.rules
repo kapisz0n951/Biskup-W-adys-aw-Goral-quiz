@@ -11,7 +11,7 @@ service cloud.firestore {
     // Fields:
     //   - nickname: string (required, 1-20 chars)
     //   - coins: number (required, >= 0)
-    //   - answeredCount: number (required, 0-10)
+    //   - answeredCount: number (required, 0-20)
     //   - lastActive: timestamp (required)
     //   - isFinished: bool (optional)
     //   - finishTime: timestamp (optional)
@@ -34,7 +34,7 @@ service cloud.firestore {
       return data.keys().hasAll(['nickname', 'coins', 'answeredCount', 'lastActive']) &&
              data.nickname is string && data.nickname.size() >= 1 && data.nickname.size() <= 20 &&
              data.coins is number && data.coins >= 0 &&
-             data.answeredCount is number && data.answeredCount >= 0 && data.answeredCount <= 10 &&
+             data.answeredCount is number && data.answeredCount >= 0 && data.answeredCount <= 20 &&
              data.lastActive is timestamp;
     }
 
